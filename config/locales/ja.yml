@@ -35,5 +35,5 @@ ja:
   button_submit: "送信"
   button_save_rules_and_submit: "マッチングルールを保存して次へ"
 
-  text_rmi_specify_unique_field_for_update: "存在するチケットを更新する場合、一意な値がある列を選択する必要があります。"
-  text_rmi_specify_unique_field_for_column: "「%{column}」という関連するチケットがあるコラムをインポートしているため、一意な値がある列を選択する必要があります。"
+  text_rmi_specify_unique_field_for_update: "存在するチケットを更新する場合、ユニークフィールドを選択する必要があります。"
+  text_rmi_specify_unique_field_for_column: "「%{column}」という他のチケットと関連する列があるため、ユニークフィールドを選択する必要があります。"
