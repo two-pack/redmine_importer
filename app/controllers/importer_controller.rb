@@ -257,7 +257,7 @@ class ImporterController < ApplicationController
           if update_issue
             if Setting.notified_events.include?('issue_updated') \
                && (!issue.current_journal.empty?)
-              
+
               Mailer.deliver_issue_edit(issue.current_journal)
             end
           else
@@ -266,7 +266,7 @@ class ImporterController < ApplicationController
             end
           end
         end
-        
+
         # Issue relations
         begin
           IssueRelation::TYPES.each_pair do |rtype, rinfo|
@@ -683,7 +683,7 @@ class ImporterController < ApplicationController
   # will create a new version and save it when it doesn't exist yet.
   def version_id_for_name!(project,name,add_versions)
     if !@version_id_by_name.has_key?(name)
-      version = Version.find_by_project_id_and_name(project.id, name)
+      version = project.shared_versions.find_by_name(name)
       if !version
         if name && (name.length > 0) && add_versions
           version = project.versions.build(:name=>name)
@@ -702,7 +702,7 @@ class ImporterController < ApplicationController
   def process_multivalue_custom_field(issue, custom_field, csv_val)
     csv_val.split(',').map(&:strip).map do |val|
       if custom_field.field_format == 'version'
-        version = Version.find_by_name val
+        version = version_id_for_name!(project, val, add_versions)
         version.id
       else
         val
