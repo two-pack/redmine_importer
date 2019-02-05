@@ -104,8 +104,8 @@ class ImporterController < ApplicationController
     Thread.current[:bulk_import_disable_notifications] = params[:disable_send_emails].present? ? true : false
 
     # which fields should we use? what maps to what?
-    unique_field = params[:unique_field].empty? ? nil : params[:unique_field]
-    spent_time_field = params[:spent_time].empty? ? nil : params[:spent_time]
+    unique_field = params[:unique_field].blank? ? nil : params[:unique_field]
+    spent_time_field = params[:spent_time].blank? ? nil : params[:spent_time]
     # default date for logging the spent time if the option is set
     spent_time_default_day = spent_time_field
 
@@ -263,9 +263,14 @@ class ImporterController < ApplicationController
         rescue ActiveRecord::RecordNotUnique
           issue_saved = false
           @messages << l(:error_importer_id_already_exists)
-        rescue ActiveRecord::DeadlockVictim
-          # retry once in case we were just unlucky
-          issue_saved = issue.save
+        rescue => error
+          if ActiveRecord.const_defined?(:DeadlockVictim) and
+            error.is_a?(ActiveRecord::DeadlockVictim)
+            # retry once in case we were just unlucky
+            issue_saved = issue.save
+          else
+            raise
+          end
         end
   
   
@@ -775,12 +780,13 @@ class ImporterController < ApplicationController
   end
 
   def process_multivalue_custom_field(project, issue, custom_field, csv_val, add_versions)
-    csv_val.split(',').map(&:strip).map do |val|
-      if custom_field.field_format == 'version'
+    values = csv_val.split(',').map(&:strip)
+    if custom_field.field_format == 'version'
+      values.map do |val|
         version_id_for_name(project, val, add_versions)
-      else
-        custom_field.value_from_keyword(val, issue)
       end
+    else
+      custom_field.value_from_keyword(values.join(","), issue)
     end
   end
 

@@ -2,11 +2,11 @@ require File.expand_path('../../test_helper', __FILE__)
 
 class ImporterControllerTest < ActionController::TestCase
   def setup
-    @project = Project.create! :name => 'foo'
-    @tracker = @project.trackers.create(:name => 'Defect')
-    @role = Role.create! :name => 'ADMIN', :permissions => [:import]
+    @tracker = Tracker.generate!
+    @project = Project.generate!
+    @role = Role.generate!(:permissions => [:import])
     @user = create_user!(@role, @project)
-    @iip = create_iip_for_multivalues!(@user, @project)
+    @iip = create_iip_for_multivalues!(@user)
     @issue = create_issue!(@project, @user)
     create_custom_fields!(@issue)
     create_versions!(@project)
@@ -41,7 +41,8 @@ class ImporterControllerTest < ActionController::TestCase
   test 'should create issue if none exists' do
     Issue.delete_all
     assert_equal 0, Issue.count
-    post :result, build_params(:update_issue => nil)
+    post :result, build_params(:update_issue => nil,
+                               :default_tracker => @tracker.id)
     assert_response :success
     assert_equal 1, Issue.count
     issue = Issue.first
@@ -50,9 +51,10 @@ class ImporterControllerTest < ActionController::TestCase
 
   test 'should send email when "Send email notifications" checkbox is checked' do
     assert_equal 'foobar', @issue.subject
-    Mailer.expects(:deliver_issue_edit)
 
-    post :result, build_params(:send_emails => 'true')
+    assert_difference 'ActionMailer::Base.deliveries.size', 1 do
+      post :result, build_params(:disable_send_emails => nil)
+    end
     assert_response :success
     @issue.reload
     assert_equal 'barfooz', @issue.subject
@@ -60,9 +62,10 @@ class ImporterControllerTest < ActionController::TestCase
 
   test 'should NOT send email when "Send email notifications" checkbox is unchecked' do
     assert_equal 'foobar', @issue.subject
-    Mailer.expects(:deliver_issue_edit).never
 
-    post :result, build_params(:send_emails => nil)
+    assert_no_difference 'ActionMailer::Base.deliveries.size' do
+      post :result, build_params(:disable_send_emails => 'true')
+    end
     assert_response :success
     @issue.reload
     assert_equal 'barfooz', @issue.subject
@@ -108,7 +111,7 @@ class ImporterControllerTest < ActionController::TestCase
 
   def versions_for(issue)
     versions_field = CustomField.find_by_name! 'Affected versions'
-    value_objs = issue.custom_values.find_all_by_custom_field_id versions_field.id
+    value_objs = issue.custom_values.where(:custom_field => versions_field)
     values = value_objs.map(&:value)
   end
   
@@ -126,25 +129,22 @@ class ImporterControllerTest < ActionController::TestCase
 
   def tags_for(issue)
     tags_field = CustomField.find_by_name! 'Tags'
-    value_objs = issue.custom_values.find_all_by_custom_field_id(tags_field.id)
+    value_objs = issue.custom_values.where(:custom_field => tags_field)
     values = value_objs.map(&:value)
   end
 
   def create_user!(role, project)
-    sponsor = User.new :admin => true,
+    sponsor = User.generate! :admin => true,
                      :firstname => 'Alice',
                      :lastname => 'Hacker',
                      :mail => 'alice.hacker@example.com'
-    user = User.new :admin => true,
+    sponsor.pref.no_self_notified = false
+    user = User.generate! :admin => true,
                      :firstname => 'Bob',
                      :lastname => 'Loblaw',
                      :mail => 'bob.loblaw@example.com'
+    user.pref.no_self_notified = false
     user.login = 'bob'
-    sponsor = User.new :admin => true,
-                       :firstname => 'A',
-                       :lastname => 'H',
-                       :mail => 'a@example.com'
-    user.parent = sponsor
     membership = user.memberships.build(:project => project)
     membership.roles << role
     membership.principal = user
@@ -152,14 +152,13 @@ class ImporterControllerTest < ActionController::TestCase
     user
   end
 
-  def create_iip_for_multivalues!(user, project)
-    create_iip!('CustomFieldMultiValues', user, project)
+  def create_iip_for_multivalues!(user)
+    create_iip!('CustomFieldMultiValues', user)
   end
 
-  def create_iip!(filename, user, project)
+  def create_iip!(filename, user)
     iip = ImportInProgress.new
     iip.user = user
-    iip.project = project
     iip.csv_data = get_csv(filename)
     iip.created = DateTime.now
     iip.encoding = 'U'
